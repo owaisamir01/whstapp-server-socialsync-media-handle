@@ -136,6 +136,8 @@ const createClient = async (clientId) => {
             }
         });
 
+
+
         // const io = socketIo(server, {
         //     cors: {
         //         origin: 'https://socialsync.envisionit.io',  // Use domain, not IP
@@ -192,20 +194,16 @@ function sendLiveSMS(sender, receiver, message_body, conversationId, timestamp) 
 async function uploadMediaToSocialCRM(media, type, sender, receiver) {
     const FormData = require('form-data');
     const axios = require('axios');
-
     try {
         const buffer = Buffer.from(media.data, 'base64');
-
         // Step 1: Fetch agents & users
         let allAgents = [];
         let tokenToCompany = {}; // token → companyname map
-
         try {
             const [agentsRes, usersRes] = await Promise.all([
                 axios.get('https://socialsync.envisionit.io/backend/fetchallagents'),
                 axios.get('https://socialsync.envisionit.io/backend/all-users')
             ]);
-
             allAgents = agentsRes.data || [];
             const usersList = usersRes.data || [];
             console.log(`Fetched ${allAgents.length} agents and ${usersList.length} users`);
@@ -221,15 +219,12 @@ async function uploadMediaToSocialCRM(media, type, sender, receiver) {
         }
         // Step 2: Sender/receiver se agent dhundo
         const agentNumber = sender.startsWith('92') ? sender : receiver;
-
         const agent = allAgents.find(a =>
             a.phone_number === agentNumber ||
             a.phone_number === sender ||
             a.phone_number === receiver
         );
-
         let companyName = 'default';
-
         if (agent && agent.authtoken && tokenToCompany[agent.authtoken]) {
             companyName = tokenToCompany[agent.authtoken];
             console.log(`MATCH FOUND → ${agentNumber} → ${companyName}`);
@@ -237,7 +232,6 @@ async function uploadMediaToSocialCRM(media, type, sender, receiver) {
             console.log(`NO MATCH → ${agentNumber} → Using default`);
             if (agent) console.log("Agent found but token not in users:", agent.authtoken);
         }
-
         // Step 3: Upload to media server
         const form = new FormData();
         const ext = getExtension(media.mimetype);
@@ -276,6 +270,102 @@ async function uploadMediaToSocialCRM(media, type, sender, receiver) {
     }
 }
 
+
+// async function uploadMediaToSocialCRM(media, type, sender, receiver) {
+//     const FormData = require('form-data');
+//     const axios = require('axios');
+//     const fs = require('fs');
+
+//     try {
+//         // Company detect (bilkul same — kuch change nahi)
+//         let companyName = 'default';
+//         try {
+//             const [agentsRes, usersRes] = await Promise.all([
+//                 axios.get('https://socialsync.envisionit.io/backend/fetchallagents'),
+//                 axios.get('https://socialsync.envisionit.io/backend/all-users')
+//             ]);
+//             const allAgents = agentsRes.data || [];
+//             const usersList = usersRes.data || [];
+//             const tokenToCompany = {};
+//             usersList.forEach(u => {
+//                 if (u.token && u.companyname) tokenToCompany[u.token] = u.companyname.trim();
+//             });
+//             const agentNumber = sender.startsWith('92') ? sender : receiver;
+//             const agent = allAgents.find(a => 
+//                 a.phone_number === agentNumber || a.phone_number === sender || a.phone_number === receiver
+//             );
+//             if (agent && agent.authtoken && tokenToCompany[agent.authtoken]) {
+//                 companyName = tokenToCompany[agent.authtoken];
+//             }
+//         } catch (err) {
+//             console.log("Company detect failed → using default");
+//         }
+
+//         const form = new FormData();
+//         const ext = getExtension(media.mimetype);
+//         const filename = `${type}_${sender}_${receiver}_${Date.now()}${ext}`;
+
+//         // YEHI EK CHANGE HAI — CHHOTE FILE (image/audio) → buffer
+//         // BADI FILE (video) → temp file + stream
+//         if (type === 'video' || media.data.length > 10 * 1024 * 1024) { // 10MB se badi file
+//             const tempPath = `/tmp/upload_${Date.now()}_${type}`;
+//             fs.writeFileSync(tempPath, Buffer.from(media.data, 'base64'));
+
+//             form.append('media', fs.createReadStream(tempPath), {
+//                 filename: filename,
+//                 contentType: media.mimetype
+//             });
+
+//             // Upload ke baad delete
+//             const response = await axios.post(
+//                 'http://75.119.134.139:4000/socialsync/upload',
+//                 form,
+//                 {
+//                     headers: form.getHeaders(),
+//                     maxBodyLength: Infinity,
+//                     maxContentLength: Infinity,
+//                     timeout: 600000
+//                 }
+//             );
+
+//             try { fs.unlinkSync(tempPath); } catch(e) {}
+
+//             if (response.data?.success) {
+//                 console.log(`UPLOADED (STREAM) → ${companyName}/${filename}`);
+//                 return response.data.url;
+//             }
+//         } 
+//         else {
+//             // Chhote files (image, voice note) → purana wala buffer method (fast aur reliable)
+//             form.append('media', Buffer.from(media.data, 'base64'), {
+//                 filename: filename,
+//                 contentType: media.mimetype
+//             });
+
+//             const response = await axios.post(
+//                 'http://75.119.134.139:4000/socialsync/upload',
+//                 form,
+//                 {
+//                     headers: form.getHeaders(),
+//                     maxBodyLength: Infinity,
+//                     timeout: 300000
+//                 }
+//             );
+
+//             if (response.data?.success) {
+//                 console.log(`UPLOADED (BUFFER) → ${companyName}/${filename}`);
+//                 return response.data.url;
+//             }
+//         }
+
+//         return null;
+
+//     } catch (err) {
+//         console.error("Upload failed:", err.message);
+//         return null;
+//     }
+// }
+
 // Extension helper (safe)
 function getExtension(mimetype) {
     const map = {
@@ -308,7 +398,6 @@ function getExtension(mimetype) {
 
 
 client.on('message_create', async (message) => {
-    
     try {
         if (message.fromMe && message.to === message.from) return; // Self message ignore
         if (message.id.fromMe && message.id.id === message.id._serialized) return; // Extra safety
@@ -324,17 +413,13 @@ client.on('message_create', async (message) => {
             console.log("Ignore group, broadcast, and newsletter SMS");
             return;
         }
-
         console.log("New message received:", message.id);
-
         // YEHI EK LINE BADAL DI — SABSE PEHLE DECLARE KAR DIYE TAake OVERWRITE NA HO!
         let senderNumber = 'unknown';
         let receiverNumber = 'unknown';
         let senderName = 'N/A';
         let receiverName = 'N/A';
-
         const myNumber = client.info?.wid?._serialized?.split('@')[0] || 'unknown';
-
         // === SENDER NAME & NUMBER ===
         try {
             const senderContact = await client.getContactById(message.from);
@@ -344,7 +429,6 @@ client.on('message_create', async (message) => {
                         senderContact.verifiedName || 
                         senderContact.shortName || 
                         senderNumber;
-
             console.log("Resolved sender name:", senderName);
             console.log("Resolved sender number:", senderNumber);
         } catch (e) {
@@ -384,42 +468,82 @@ client.on('message_create', async (message) => {
         // === Baaki sab kuch bilkul same ===
         let messageBody = message.body || "N/A";
 
-              // ==================== MEDIA HANDLING (FINAL 2025 VERSION) ====================
-        if (message.hasMedia) {
-            try {
-                const media = await message.downloadMedia();
-                if (!media) throw new Error("Download failed to download");
+       
 
-                // Detect exact type
-                let mediaType = 'document';
-                if (media.mimetype.startsWith('image/')) {
-                    mediaType = media.mimetype.includes('sticker') ? 'sticker' : 'image';
-                } else if (media.mimetype.startsWith('video/')) {
-                    mediaType = 'video';
-                } else if (media.mimetype.startsWith('audio/')) {
-                    mediaType = media.mimetype.includes('ptt') || media.mimetype.includes('ogg') ? 'voicenote' : 'audio';
-                } else if (media.mimetype.includes('document') || media.mimetype.includes('pdf') || media.mimetype.includes('msword') || media.mimetype.includes('sheet')) {
-                    mediaType = 'document';
+if (message.hasMedia) {
+    try {
+        let media = null;
+        let mediaType = 'document';
+
+        // Type detect
+        if (message.type === 'video') mediaType = 'video';
+        else if (message.type === 'image') mediaType = 'image';
+        else if (message.type === 'ptt' || message.type === 'audio') mediaType = 'voicenote';
+        console.log(`MEDIA → ${mediaType.toUpperCase()}`);
+        // IMAGE & VOICENOTE → normal download (bilkul working)
+        if (mediaType !== 'video') {
+            media = await message.downloadMedia();
+        }
+        // VIDEO KE LIYE → NEW 2025 METHOD (DIRECT PATH + MEDIAKEY)
+        if (mediaType === 'video') {
+            console.log("VIDEO DETECTED → Using Direct Path Bypass (2025 Fix)");
+            const mediaData = message._data;
+            if (mediaData.directPath && mediaData.mediaKey) {
+                const url = `https://mmg.whatsapp.net${mediaData.directPath}`;
+                const auth = btoa(mediaData.clientUrl || message.clientUrl || ""); // fallback
+                const finalUrl = `${url}?auth=${auth}&token=${mediaData.mediaKey}`;
+                try {
+                    const response = await axios.get(finalUrl, {
+                        responseType: 'arraybuffer',
+                        timeout: 90000,
+                        headers: {
+                            'Origin': 'https://web.whatsapp.com',
+                            'Referer': 'https://web.whatsapp.com/'
+                        }
+                    });
+                    media = {
+                        data: Buffer.from(response.data).toString('base64'),
+                        mimetype: mediaData.mimetype || 'video/mp4',
+                        filename: mediaData.filehash || 'video.mp4'
+                    };
+                    console.log("VIDEO DOWNLOADED VIA DIRECT PATH → Success!");
+                } catch (e) {
+                    console.log("Direct path failed → fallback to old method");
+                    // Fallback: purana method
+                    await message.downloadMedia();
+                    await new Promise(r => setTimeout(r, 12000));
+                    media = await message.downloadMedia();
                 }
-
-                // Upload to SocialCRM Media Server
-                const mediaUrl = await uploadMediaToSocialCRM(media, mediaType, senderNumber, receiverNumber);
-
-                if (mediaUrl) {
-                    messageBody = `[${mediaType.toUpperCase()}] ${mediaUrl}`;
-                    console.log(`MEDIA UPLOADED → ${mediaType.toUpperCase()}: ${mediaUrl}`);
-                } else {
-                    messageBody = `This is a media: ${mediaType} (upload failed)`;
-                }
-
-            } catch (err) {
-                console.error("MEDIA PROCESSING FAILED:", err.message);
-                messageBody = "This is a media: error";
+            } else {
+                // Agar directPath nahi hai → purana method
+                await message.downloadMedia();
+                await new Promise(r => setTimeout(r, 12000));
+                media = await message.downloadMedia();
             }
         }
-        // =============================================================================
+        // Final check
+        if (!media || !media.data || media.data.length < 10000) {
+            throw new Error("Video download failed completely");
+        }
+        // Upload
+        const mediaUrl = await uploadMediaToSocialCRM(media, mediaType, senderNumber, receiverNumber);
+        if (mediaUrl) {
+            messageBody = `[${mediaType.toUpperCase()}] ${mediaUrl}`;
+            console.log(`UPLOADED → ${mediaType}: ${mediaUrl}`);
+        } else {
+            messageBody = `[${mediaType.toUpperCase()}] upload failed`;
+        }
 
-        const conversationId = [senderNumber, receiverNumber].sort().join('-');
+    } catch (err) {
+        console.error("MEDIA FINAL FAIL:", err.message);
+        messageBody = "[MEDIA] failed";
+    }
+}
+
+
+
+
+const conversationId = [senderNumber, receiverNumber].sort().join('-');
         const timestamp = new Date().toLocaleString('en-US', {
             hour12: true,
             hour: '2-digit',
@@ -449,10 +573,6 @@ client.on('message_create', async (message) => {
         console.error("Error processing message:", error);
     }
 });
-
-
-
-
 
 
         client.on("disconnected", async (reason) => {
